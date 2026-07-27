@@ -319,6 +319,7 @@
     {
       id: 1,
       username: 'admin',
+      password: '1234',
       nombre: 'Administrador Principal',
       rol: 'Administrador',
       permisos: ['crear', 'editar', 'eliminar', 'reportes', 'usuarios']
@@ -326,6 +327,7 @@
     {
       id: 2,
       username: 'pastor',
+      password: '1234',
       nombre: 'Pastor Principal',
       rol: 'Pastor',
       permisos: ['crear', 'editar', 'reportes']
@@ -364,6 +366,7 @@
     document.getElementById('formUsuario').reset();
     document.getElementById('userId').value = '';
     document.getElementById('modalTitulo').textContent = 'Nuevo Usuario';
+    document.getElementById('userPassword').required = true;
     aplicarPermisosSegunRol();
     document.getElementById('modalUsuario').style.display = 'flex';
   }
@@ -390,6 +393,7 @@
     e.preventDefault();
     const id = document.getElementById('userId').value;
     const username = document.getElementById('userUsername').value.trim();
+    const passwordInput = document.getElementById('userPassword').value.trim();
     const nombre = document.getElementById('userNombre').value.trim();
     const rol = document.getElementById('userRol').value;
 
@@ -403,12 +407,14 @@
     if (id) {
       const idx = usuarios.findIndex(u => u.id == id);
       if (idx !== -1) {
-        usuarios[idx] = { ...usuarios[idx], username, nombre, rol, permisos };
+        const passwordFinal = passwordInput !== '' ? passwordInput : usuarios[idx].password;
+        usuarios[idx] = { ...usuarios[idx], username, password: passwordFinal, nombre, rol, permisos };
       }
     } else {
       usuarios.push({
         id: Date.now(),
         username,
+        password: passwordInput,
         nombre,
         rol,
         permisos
@@ -425,6 +431,8 @@
 
     document.getElementById('userId').value = u.id;
     document.getElementById('userUsername').value = u.username;
+    document.getElementById('userPassword').value = '';
+    document.getElementById('userPassword').required = false;
     document.getElementById('userNombre').value = u.nombre;
     document.getElementById('userRol').value = u.rol;
 
