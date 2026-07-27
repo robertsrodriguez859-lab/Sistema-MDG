@@ -181,7 +181,7 @@
 
 <div class="app">
   <div class="ministerio-container">
-    <img src="logo.png" alt="Logo Iglesia" class="login-logo">
+    <img src="Logo.png" alt="Logo Iglesia" class="login-logo">
     <div class="ministerio-banner">Ministerio Internacional Movimiento de Gloria</div>
   </div>
   <header class="top">
@@ -287,7 +287,21 @@ document.getElementById('btnCerrarSesion').addEventListener('click', () => {
   window.location.href = 'login.html';
 });
 
-const CARGOS_LISTA = ['Miembro', 'Lider', 'Mentor', 'Evangelista', 'Anciano', 'Profeta', 'Pastor'];
+const CARGOS_LISTA = ['Miembro', 'Líder', 'Mentor', 'Evangelista', 'Anciano', 'Profeta', 'Pastor'];
+
+// Función para asegurar el plural correcto en español (ej. Líder -> Líderes, Mentor -> Mentores)
+function obtenerPluralCargo(cargo) {
+  switch (cargo) {
+    case 'Miembro': return 'Miembros';
+    case 'Líder': return 'Líderes';
+    case 'Mentor': return 'Mentores';
+    case 'Evangelista': return 'Evangelistas';
+    case 'Anciano': return 'Ancianos';
+    case 'Profeta': return 'Profetas';
+    case 'Pastor': return 'Pastores';
+    default: return cargo + 's';
+  }
+}
 
 async function cargarReportes() {
   try {
@@ -316,7 +330,7 @@ async function cargarReportes() {
     mRes.forEach(m => { if (porCargo[m.cargo] !== undefined) porCargo[m.cargo]++; });
 
     document.getElementById('desgloseCargos').innerHTML = Object.entries(porCargo)
-      .map(([cargo, cant]) => `<div class="item-reporte"><span>${cargo}s:</span><span class="val">${cant}</span></div>`)
+      .map(([cargo, cant]) => `<div class="item-reporte"><span>${obtenerPluralCargo(cargo)}:</span><span class="val">${cant}</span></div>`)
       .join('');
 
     // Casas de paz
