@@ -113,12 +113,15 @@
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=Karla:wght@400;700&display=swap" rel="stylesheet">
+
+<!-- SDKs de Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
 
   <div class="login-card">
     <img src="logo.png" alt="Logo Iglesia" class="login-logo">
-
     <h2>Ministerio Internacional Movimiento de Gloria</h2>
     <p>Ingrese su usuario y contraseña</p>
     
@@ -137,61 +140,52 @@
   </div>
 
 <script>
+  // Configuración de Firebase para tu proyecto mdgweb-b7ab7
+  const firebaseConfig = {
+    apiKey: "AIzaSyD-lfkA-khlPes6zcjGmfAACWK9SK6Uhxc", // Reemplaza con tu API Key copiada de Firebase
+    authDomain: "mdgweb-b7ab7.firebaseapp.com",
+    projectId: "mdgweb-b7ab7",
+    storageBucket: "mdgweb-b7ab7.appspot.com",
+    messagingSenderId: "571662431119",
+    appId: "1:571662431119:web:bf0d2b4ca2164d70c9"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+
   if (localStorage.getItem('sesion_iniciada') === 'true') {
     window.location.href = 'index.html';
   }
 
-  // Credenciales fijas de respaldo
-  const USUARIOS_FIJOS = {
-    'admin': '1234',
-    'pastor': '1234'
-  };
-
-  document.getElementById('formLogin').addEventListener('submit', (e) => {
+  document.getElementById('formLogin').addEventListener('submit', async (e) => {
     e.preventDefault();
     const user = document.getElementById('loginUsuario').value.trim();
     const pass = document.getElementById('loginPassword').value.trim();
     const errorEl = document.getElementById('loginError');
+    errorEl.style.display = 'none';
 
-    // 1. Validar contra admin o pastor fijos
-    if (USUARIOS_FIJOS[user] && USUARIOS_FIJOS[user] === pass) {
-      localStorage.setItem('sesion_iniciada', 'true');
-      localStorage.setItem('usuario_actual', user);
-      window.location.href = 'index.html';
-      return;
-    }
+    try {
+      // Buscar el usuario en la nube de Firestore
+      const querySnapshot = await db.collection("usuarios").where("username", "==", user).get();
+      
+      let usuarioEncontrado = null;
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.password === pass) {
+          usuarioEncontrado = data;
+        }
+      });
 
-    // 2. Buscar en TODAS las posibles llaves donde el navegador suele guardar usuarios
-    const posiblesLlaves = ['sistema_usuarios', 'usuarios', 'lista_usuarios', 'users', 'app_usuarios'];
-    let usuariosRegistrados = [];
-
-    for (const llave of posiblesLlaves) {
-      const data = localStorage.getItem(llave);
-      if (data) {
-        try {
-          const parsed = JSON.parse(data);
-          if (Array.isArray(parsed)) {
-            usuariosRegistrados = usuariosRegistrados.concat(parsed);
-          }
-        } catch (err) {}
+      if (usuarioEncontrado) {
+        localStorage.setItem('sesion_iniciada', 'true');
+        localStorage.setItem('usuario_actual', user);
+        window.location.href = 'index.html';
+      } else {
+        errorEl.style.display = 'block';
       }
-    }
-
-    // 3. Revisar si coincide con cualquier combinación de propiedades del objeto usuario
-    const usuarioEncontrado = usuariosRegistrados.find(u => {
-      if (!u) return false;
-      const matchUser = (u.username === user) || (u.usuario === user) || (u.user === user) || (u.nombre === user);
-      const matchPass = (u.password === pass) || (u.clave === pass) || (u.contrasena === pass) || (u.pass === pass);
-      return matchUser && matchPass;
-    });
-
-    if (usuarioEncontrado) {
-      localStorage.setItem('sesion_iniciada', 'true');
-      // Guardar el nombre de usuario normalizado
-      const nombreFinal = usuarioEncontrado.username || usuarioEncontrado.usuario || usuarioEncontrado.user || user;
-      localStorage.setItem('usuario_actual', nombreFinal);
-      window.location.href = 'index.html';
-    } else {
+    } catch (error) {
+      console.error("Error al iniciar sesión:", error);
+      errorEl.textContent = "Error de conexión con la base de datos";
       errorEl.style.display = 'block';
     }
   });
