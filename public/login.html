@@ -143,20 +143,33 @@
     window.location.href = 'index.html';
   }
 
+  // Credenciales maestras por defecto que NUNCA fallarán
+  const USUARIOS_FIJOS = {
+    'admin': '1234',
+    'pastor': '1234'
+  };
+
   document.getElementById('formLogin').addEventListener('submit', (e) => {
     e.preventDefault();
     const user = document.getElementById('loginUsuario').value.trim();
     const pass = document.getElementById('loginPassword').value.trim();
     const errorEl = document.getElementById('loginError');
 
-    // Lista por defecto + usuarios registrados dinámicamente en localStorage
-    const usuariosRegistrados = JSON.parse(localStorage.getItem('sistema_usuarios')) || [
-      { username: 'admin', password: '1234', permisos: ['crear', 'editar', 'eliminar', 'reportes', 'usuarios'] },
-      { username: 'pastor', password: '1234', permisos: ['crear', 'editar', 'reportes'] }
-    ];
+    // 1. Validar primero contra los usuarios fijos de respaldo (admin / pastor)
+    if (USUARIOS_FIJOS[user] && USUARIOS_FIJOS[user] === pass) {
+      localStorage.setItem('sesion_iniciada', 'true');
+      localStorage.setItem('usuario_actual', user);
+      window.location.href = 'index.html';
+      return;
+    }
 
-    // Buscar si el usuario ingresado coincide con alguno registrado
-    const usuarioEncontrado = usuariosRegistrados.find(u => u.username === user && u.password === pass);
+    // 2. Si no es fijo, buscar en los usuarios registrados dinámicamente comprobando múltiples nombres posibles de campos de contraseña
+    const usuariosRegistrados = JSON.parse(localStorage.getItem('sistema_usuarios')) || [];
+    const usuarioEncontrado = usuariosRegistrados.find(u => {
+      const matchUser = u.username === user || u.usuario === user;
+      const matchPass = (u.password === pass) || (u.clave === pass) || (u.contrasena === pass) || (u.pass === pass);
+      return matchUser && matchPass;
+    });
 
     if (usuarioEncontrado) {
       localStorage.setItem('sesion_iniciada', 'true');
