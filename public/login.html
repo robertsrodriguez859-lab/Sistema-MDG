@@ -41,9 +41,8 @@
     align-items: center;
   }
 
-  /* --- ESTILOS DEL LOGO --- */
   .login-logo {
-    max-width: 110px;      /* Ajusta este valor según el tamaño deseado */
+    max-width: 110px;
     height: auto;
     margin-bottom: 16px;
     object-fit: contain;
@@ -120,8 +119,7 @@
 <body>
 
   <div class="login-card">
-    <!-- REEMPLAZA "logo.png" CON LA RUTA DE TU IMAGEN O URL -->
-    <img src="logo.png" alt="Logo Iglesia" class="login-logo">
+    <img src="Logo.png" alt="Logo Iglesia" class="login-logo">
 
     <h2>Ministerio Internacional Movimiento de Gloria</h2>
     <p>Ingrese su usuario y contraseña</p>
@@ -145,18 +143,22 @@
     window.location.href = 'index.html';
   }
 
-  const USUARIOS_VALIDOS = {
-    'admin': '1234',
-    'pastor': '1234'
-  };
-
   document.getElementById('formLogin').addEventListener('submit', (e) => {
     e.preventDefault();
     const user = document.getElementById('loginUsuario').value.trim();
     const pass = document.getElementById('loginPassword').value.trim();
     const errorEl = document.getElementById('loginError');
 
-    if (USUARIOS_VALIDOS[user] && USUARIOS_VALIDOS[user] === pass) {
+    // Lista por defecto + usuarios registrados dinámicamente en localStorage
+    const usuariosRegistrados = JSON.parse(localStorage.getItem('sistema_usuarios')) || [
+      { username: 'admin', password: '1234', permisos: ['crear', 'editar', 'eliminar', 'reportes', 'usuarios'] },
+      { username: 'pastor', password: '1234', permisos: ['crear', 'editar', 'reportes'] }
+    ];
+
+    // Buscar si el usuario ingresado coincide con alguno registrado
+    const usuarioEncontrado = usuariosRegistrados.find(u => u.username === user && u.password === pass);
+
+    if (usuarioEncontrado) {
       localStorage.setItem('sesion_iniciada', 'true');
       localStorage.setItem('usuario_actual', user);
       window.location.href = 'index.html';
