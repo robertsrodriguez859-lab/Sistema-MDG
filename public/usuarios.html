@@ -210,6 +210,10 @@
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Karla:wght@400;700&display=swap" rel="stylesheet">
+
+<!-- SDKs de Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
 
@@ -221,7 +225,7 @@
   <header class="top">
     <div>
       <h1>Gestión de Usuarios</h1>
-      <div class="subtitle">Administra los accesos y las acciones permitidas dentro del sistema</div>
+      <div class="subtitle">Administra los accesos y las acciones permitidas dentro del sistema (Nube)</div>
     </div>
     <div class="header-actions">
       <a href="index.html" class="btn btn-ghost" style="text-decoration:none;">← Regresar al Panel</a>
@@ -309,56 +313,69 @@
 </div>
 
 <script>
+  // Configuración de Firebase para tu proyecto mdgweb-b7ab7
+  const firebaseConfig = {
+    apiKey: "TU_API_KEY_REAL", // Reemplaza con tu API Key copiada de Firebase
+    authDomain: "mdgweb-b7ab7.firebaseapp.com",
+    projectId: "mdgweb-b7ab7",
+    storageBucket: "mdgweb-b7ab7.appspot.com",
+    messagingSenderId: "571662431119",
+    appId: "1:571662431119:web:bf0d2b4ca2164d70c9"
+  };
+
+  if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+  }
+  const db = firebase.firestore();
+
   // VERIFICACIÓN DE SESIÓN
   if (localStorage.getItem('sesion_iniciada') !== 'true') {
     window.location.href = 'login.html';
   }
 
-  // BASE DE DATOS INICIAL DE USUARIOS EN LOCALSTORAGE
-  let usuarios = JSON.parse(localStorage.getItem('sistema_usuarios')) || [
-    {
-      id: 1,
-      username: 'admin',
-      password: '1234',
-      nombre: 'Administrador Principal',
-      rol: 'Administrador',
-      permisos: ['crear', 'editar', 'eliminar', 'reportes', 'usuarios']
-    },
-    {
-      id: 2,
-      username: 'pastor',
-      password: '1234',
-      nombre: 'Pastor Principal',
-      rol: 'Pastor',
-      permisos: ['crear', 'editar', 'reportes']
-    }
-  ];
+  let usuarios = [];
 
-  // RENDERIZAR TABLA DE USUARIOS
-  function renderUsuarios() {
+  // RENDERIZAR TABLA DESDE FIRESTORE
+  async function renderUsuarios() {
     const tbody = document.getElementById('tablaUsuarios');
-    tbody.innerHTML = '';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Cargando usuarios de la nube...</td></tr>';
 
-    usuarios.forEach(u => {
-      let roleClass = u.rol === 'Administrador' ? 'role-admin' : (u.rol === 'Pastor' ? 'role-pastor' : 'role-colab');
-      
-      const tagsPermisos = u.permisos.map(p => `<span class="badge-perm">${p}</span>`).join('');
+    try {
+      const snapshot = await db.collection("usuarios").get();
+      usuarios = [];
+      snapshot.forEach((doc) => {
+        usuarios.push({ idDoc: doc.id, ...doc.data() });
+      });
 
-      tbody.innerHTML += `
-        <tr>
-          <td style="font-weight: 700;">${escapeHtml(u.username)}</td>
-          <td>${escapeHtml(u.nombre)}</td>
-          <td><span class="badge-role ${roleClass}">${escapeHtml(u.rol)}</span></td>
-          <td>${tagsPermisos || '<em>Sin permisos</em>'}</td>
-          <td style="text-align: right;">
-            <button class="btn btn-ghost" style="padding: 4px 8px; font-size: 0.75rem;" onclick="editarUsuario(${u.id})">Editar</button>
-            ${u.username !== 'admin' ? `<button class="btn btn-ghost" style="padding: 4px 8px; font-size: 0.75rem; color: #b30000;" onclick="eliminarUsuario(${u.id})">Eliminar</button>` : ''}
-          </td>
-        </tr>
-      `;
-    });
+      tbody.innerHTML = '';
 
-    localStorage.setItem('sistema_usuarios', JSON.stringify(usuarios));
+      if (usuarios.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No hay usuarios registrados.</td></tr>';
+        return;
+      }
+
+      usuarios.forEach(u => {
+        let roleClass = u.rol === 'Administrador' ? 'role-admin' : (u.rol === 'Pastor' ? 'role-pastor' : 'role-colab');
+        const listaPermisos = u.permisos || [];
+        const tagsPermisos = listaPermisos.map(p => `<span class="badge-perm">${p}</span>`).join('');
+
+        tbody.innerHTML += `
+          <tr>
+            <td style="font-weight: 700;">${escapeHtml(u.username || '')}</td>
+            <td>${escapeHtml(u.nombre || '')}</td>
+            <td><span class="badge-role ${roleClass}">${escapeHtml(u.rol || '')}</span></td>
+            <td>${tagsPermisos || '<em>Sin permisos</em>'}</td>
+            <td style="text-align: right;">
+              <button class="btn btn-ghost" style="padding: 4px 8px; font-size: 0.75rem;" onclick="editarUsuario('${u.idDoc}')">Editar</button>
+              ${u.username !== 'admin' ? `<button class="btn btn-ghost" style="padding: 4px 8px; font-size: 0.75rem; color: #b30000;" onclick="eliminarUsuario('${u.idDoc}')">Eliminar</button>` : ''}
+            </td>
+          </tr>
+        `;
+      });
+    } catch (error) {
+      console.error("Error al cargar usuarios:", error);
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">Error al conectar con la nube.</td></tr>';
+    }
   }
 
   // MODAL ACCIONES
@@ -375,7 +392,6 @@
     document.getElementById('modalUsuario').style.display = 'none';
   }
 
-  // SUGERIR PERMISOS SEGÚN EL ROL SELECCIONADO
   function aplicarPermisosSegunRol() {
     const rol = document.getElementById('userRol').value;
     const esAdmin = rol === 'Administrador';
@@ -388,10 +404,10 @@
     document.getElementById('perm_usuarios').checked = esAdmin;
   }
 
-  // GUARDAR O ACTUALIZAR
-  function guardarUsuario(e) {
+  // GUARDAR O ACTUALIZAR EN FIRESTORE
+  async function guardarUsuario(e) {
     e.preventDefault();
-    const id = document.getElementById('userId').value;
+    const idDoc = document.getElementById('userId').value;
     const username = document.getElementById('userUsername').value.trim();
     const passwordInput = document.getElementById('userPassword').value.trim();
     const nombre = document.getElementById('userNombre').value.trim();
@@ -404,52 +420,71 @@
     if (document.getElementById('perm_reportes').checked) permisos.push('reportes');
     if (document.getElementById('perm_usuarios').checked) permisos.push('usuarios');
 
-    if (id) {
-      const idx = usuarios.findIndex(u => u.id == id);
-      if (idx !== -1) {
-        const passwordFinal = passwordInput !== '' ? passwordInput : usuarios[idx].password;
-        usuarios[idx] = { ...usuarios[idx], username, password: passwordFinal, nombre, rol, permisos };
-      }
-    } else {
-      usuarios.push({
-        id: Date.now(),
-        username,
-        password: passwordInput,
-        nombre,
-        rol,
-        permisos
-      });
-    }
+    try {
+      if (idDoc) {
+        // Actualizar existente
+        const userRef = db.collection("usuarios").doc(idDoc);
+        const docSnap = await userRef.get();
+        const passwordFinal = passwordInput !== '' ? passwordInput : docSnap.data().password;
 
-    renderUsuarios();
-    cerrarModal();
+        await userRef.update({
+          username,
+          password: passwordFinal,
+          nombre,
+          rol,
+          permisos
+        });
+      } else {
+        // Crear nuevo en la nube
+        await db.collection("usuarios").add({
+          username,
+          password: passwordInput,
+          nombre,
+          rol,
+          permisos,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      }
+
+      renderUsuarios();
+      cerrarModal();
+    } catch (error) {
+      console.error("Error al guardar en Firebase:", error);
+      alert("Hubo un error al guardar el usuario en la nube.");
+    }
   }
 
-  function editarUsuario(id) {
-    const u = usuarios.find(user => user.id === id);
+  function editarUsuario(idDoc) {
+    const u = usuarios.find(user => user.idDoc === idDoc);
     if (!u) return;
 
-    document.getElementById('userId').value = u.id;
-    document.getElementById('userUsername').value = u.username;
+    document.getElementById('userId').value = u.idDoc;
+    document.getElementById('userUsername').value = u.username || '';
     document.getElementById('userPassword').value = '';
     document.getElementById('userPassword').required = false;
-    document.getElementById('userNombre').value = u.nombre;
-    document.getElementById('userRol').value = u.rol;
+    document.getElementById('userNombre').value = u.nombre || '';
+    document.getElementById('userRol').value = u.rol || 'Administrador';
 
-    document.getElementById('perm_crear').checked = u.permisos.includes('crear');
-    document.getElementById('perm_editar').checked = u.permisos.includes('editar');
-    document.getElementById('perm_eliminar').checked = u.permisos.includes('eliminar');
-    document.getElementById('perm_reportes').checked = u.permisos.includes('reportes');
-    document.getElementById('perm_usuarios').checked = u.permisos.includes('usuarios');
+    const listaPermisos = u.permisos || [];
+    document.getElementById('perm_crear').checked = listaPermisos.includes('crear');
+    document.getElementById('perm_editar').checked = listaPermisos.includes('editar');
+    document.getElementById('perm_eliminar').checked = listaPermisos.includes('eliminar');
+    document.getElementById('perm_reportes').checked = listaPermisos.includes('reportes');
+    document.getElementById('perm_usuarios').checked = listaPermisos.includes('usuarios');
 
     document.getElementById('modalTitulo').textContent = 'Editar Usuario';
     document.getElementById('modalUsuario').style.display = 'flex';
   }
 
-  function eliminarUsuario(id) {
-    if (confirm('¿Deseas borrar este usuario del sistema?')) {
-      usuarios = usuarios.filter(u => u.id !== id);
-      renderUsuarios();
+  async function eliminarUsuario(idDoc) {
+    if (confirm('¿Deseas borrar este usuario de la nube?')) {
+      try {
+        await db.collection("usuarios").doc(idDoc).delete();
+        renderUsuarios();
+      } catch (error) {
+        console.error("Error al eliminar:", error);
+        alert("No se pudo eliminar el usuario.");
+      }
     }
   }
 
