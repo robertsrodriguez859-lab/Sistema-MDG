@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Iniciar Sesión — Sistema Iglesia</title>
+<style>
+  :root {
+    --bg: #EEF1EC;
+    --bg-card: #FBFAF7;
+    --ink: #232B3A;
+    --ink-soft: #5B6472;
+    --wine: #000000;
+    --wine-dark: #111111;
+    --gold: #B8923F;
+    --rule: #D9D4C8;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Karla', -apple-system, sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  .login-card {
+    background: var(--bg-card);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    padding: 36px 32px;
+    width: 100%;
+    max-width: 380px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* --- ESTILOS DEL LOGO --- */
+  .login-logo {
+    max-width: 110px;      /* Ajusta este valor según el tamaño deseado */
+    height: auto;
+    margin-bottom: 16px;
+    object-fit: contain;
+  }
+
+  .login-card h2 {
+    font-family: 'Fraunces', serif;
+    font-size: 1.6rem;
+    color: var(--wine-dark);
+    margin: 0 0 6px 0;
+    text-align: center;
+  }
+  .login-card p {
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+    margin: 0 0 24px 0;
+    text-align: center;
+  }
+  .login-form {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .login-form label {
+    display: flex;
+    flex-direction: column;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--ink-soft);
+    gap: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  input[type="text"], input[type="password"] {
+    font-family: 'Karla', sans-serif;
+    font-size: 0.92rem;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 10px 12px;
+    background: #fff;
+    color: var(--ink);
+    width: 100%;
+  }
+  input:focus {
+    outline: 2px solid var(--gold);
+    outline-offset: 1px;
+  }
+  .btn {
+    font-family: 'Karla', sans-serif;
+    font-weight: 700;
+    font-size: 0.9rem;
+    border: none;
+    border-radius: 6px;
+    padding: 12px;
+    background: var(--wine);
+    color: #fff;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.08s ease;
+    margin-top: 10px;
+  }
+  .btn:hover { background: var(--wine-dark); }
+  .btn:active { transform: scale(0.98); }
+  .error-msg {
+    color: #b30000;
+    font-size: 0.82rem;
+    text-align: center;
+    display: none;
+  }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=Karla:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <div class="login-card">
+    <!-- REEMPLAZA "logo.png" CON LA RUTA DE TU IMAGEN O URL -->
+    <img src="logo.png" alt="Logo Iglesia" class="login-logo">
+
+    <h2>Ministerio Internacional Movimiento de Gloria</h2>
+    <p>Ingrese su usuario y contraseña</p>
+    
+    <form class="login-form" id="formLogin">
+      <label>
+        Usuario
+        <input type="text" id="loginUsuario" placeholder="Usuario" required autocomplete="username">
+      </label>
+      <label>
+        Contraseña
+        <input type="password" id="loginPassword" placeholder="••••••••" required autocomplete="current-password">
+      </label>
+      <button type="submit" class="btn">Iniciar sesión</button>
+      <div class="error-msg" id="loginError">Usuario o contraseña incorrectos</div>
+    </form>
+  </div>
+
+<script>
+  if (localStorage.getItem('sesion_iniciada') === 'true') {
+    window.location.href = 'index.html';
+  }
+
+  const USUARIOS_VALIDOS = {
+    'admin': '1234',
+    'pastor': '1234'
+  };
+
+  document.getElementById('formLogin').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const user = document.getElementById('loginUsuario').value.trim();
+    const pass = document.getElementById('loginPassword').value.trim();
+    const errorEl = document.getElementById('loginError');
+
+    if (USUARIOS_VALIDOS[user] && USUARIOS_VALIDOS[user] === pass) {
+      localStorage.setItem('sesion_iniciada', 'true');
+      localStorage.setItem('usuario_actual', user);
+      window.location.href = 'index.html';
+    } else {
+      errorEl.style.display = 'block';
+    }
+  });
+</script>
+</body>
+</html>
