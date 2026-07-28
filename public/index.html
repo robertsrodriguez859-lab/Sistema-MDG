@@ -124,6 +124,8 @@
     transition: all 0.2s ease;
     flex-grow: 1;
     text-align: center;
+    text-decoration: none;
+    display: inline-block;
   }
   .modulo-btn.active{
     background:var(--wine);
@@ -173,6 +175,13 @@
 
   .lista{display:flex; flex-direction:column; gap:12px;}
   
+  .card-tabla { background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius); overflow-x: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
+  table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem; min-width: 600px; }
+  th { background: #E5E9E1; padding: 14px 18px; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-soft); border-bottom: 1px solid var(--rule); }
+  td { padding: 14px 18px; border-bottom: 1px solid var(--rule); }
+  tr:last-child td { border-bottom: none; }
+  .badge-cargo { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; background: #FEF3C7; color: #92400E; }
+
   .grupo-categoria{
     margin-bottom:24px;
     background: rgba(251, 250, 247, 0.4);
@@ -387,28 +396,12 @@
     margin-top:24px;
   }
 
-  /* MEDIA QUERIES PARA ADAPTABILIDAD TOTAL */
   @media (max-width: 768px) {
-    .app {
-      padding: 12px 10px 70px;
-    }
-    header.top {
-      flex-direction: column;
-      align-items: flex-start;
-    }
-    .header-actions {
-      width: 100%;
-      justify-content: space-between;
-    }
-    .card {
-      grid-template-columns: 1fr;
-      gap: 12px;
-    }
-    .acciones {
-      justify-content: flex-start;
-      border-top: 1px dashed var(--rule);
-      padding-top: 8px;
-    }
+    .app { padding: 12px 10px 70px; }
+    header.top { flex-direction: column; align-items: flex-start; }
+    .header-actions { width: 100%; justify-content: space-between; }
+    .card { grid-template-columns: 1fr; gap: 12px; }
+    .acciones { justify-content: flex-start; border-top: 1px dashed var(--rule); padding-top: 8px; }
   }
 
   @media (max-width:600px){
@@ -442,7 +435,7 @@
     </div>
   </header>
 
-  <div id="loading" class="loading">Abriendo el sistema…</div>
+  <div id="loading" class="loading">Conectando con Firebase…</div>
 
   <div id="contenido" style="display:none;">
     <div class="modulos" id="modulos"></div>
@@ -454,7 +447,7 @@
     <div class="lista" id="lista"></div>
   </div>
 
-  <div class="aviso">Los datos se guardan en la base de datos local del servidor (iglesia.db).</div>
+  <div class="aviso">Los datos se sincronizan directamente con Firebase Firestore.</div>
 
   <button class="fab" id="btnNuevo" title="Añadir registro">+</button>
 </div>
@@ -480,486 +473,608 @@
   </div>
 </div>
 
-<script>
-// ---------- PROTECCIÓN DE SESIÓN Y VALIDADOR DE PERMISOS ----------
-if (localStorage.getItem('sesion_iniciada') !== 'true') {
-  window.location.href = 'login.html';
-}
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getFirestore, collection, getDocs, addDoc, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-function tienePermiso(accion) {
-  const usuarioActualName = localStorage.getItem('usuario_actual') || 'admin';
-  const usuarios = JSON.parse(localStorage.getItem('sistema_usuarios')) || [
-    { username: 'admin', permisos: ['crear', 'editar', 'eliminar', 'reportes', 'usuarios'] },
-    { username: 'pastor', permisos: ['crear', 'editar', 'reportes'] }
-  ];
-  
-  const user = usuarios.find(u => u.username === usuarioActualName);
-  return user ? user.permisos.includes(accion) : true;
-}
+  // TODO: Reemplaza estos datos con la configuración de tu proyecto de Firebase
+  const firebaseConfig = {
+    apiKey: "TU_API_KEY",
+    authDomain: "TU_PROYECTO.firebaseapp.com",
+    projectId: "TU_PROYECTO_ID",
+    storageBucket: "TU_PROYECTO.appspot.com",
+    messagingSenderId: "TU_SENDER_ID",
+    appId: "TU_APP_ID"
+  };
 
-if (tienePermiso('reportes')) {
-  document.getElementById('btnIrReportes').style.display = 'inline-block';
-}
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
 
-if (tienePermiso('usuarios')) {
-  document.getElementById('btnIrUsuarios').style.display = 'inline-block';
-}
-
-if (!tienePermiso('crear')) {
-  document.getElementById('btnNuevo').style.display = 'none';
-}
-
-document.getElementById('btnCerrarSesion').addEventListener('click', () => {
-  localStorage.removeItem('sesion_iniciada');
-  localStorage.removeItem('usuario_actual');
-  window.location.href = 'login.html';
-});
-
-const CARGOS_LISTA = ['Miembro', 'Lider', 'Mentor', 'Evangelista', 'Anciano', 'Profeta', 'Pastor'];
-
-const MODULOS = [
-  {
-    key: 'miembros',
-    label: 'Miembros',
-    subtitulo: 'Libro de la congregación agrupado por cargos',
-    campoTitulo: 'nombre',
-    campoBadge: 'ministerio',
-    agruparPor: 'cargo',
-    gruposFijos: CARGOS_LISTA,
-    camposDetalle: ['telefono', 'email', 'nacimiento'],
-    campos: [
-      { id: 'nombre', label: 'Nombre completo', tipo: 'text', requerido: true, full: true },
-      { id: 'cargo', label: 'Cargo', tipo: 'select', opciones: CARGOS_LISTA },
-      { id: 'telefono', label: 'Teléfono', tipo: 'tel' },
-      { id: 'email', label: 'Correo', tipo: 'email' },
-      { id: 'direccion', label: 'Dirección', tipo: 'text', full: true },
-      { id: 'nacimiento', label: 'Fecha de nacimiento', tipo: 'date' },
-      { id: 'ministerio', label: 'Ministerio / grupo', tipo: 'select', opciones: ['', 'Alabanza', 'Jóvenes', 'Niños', 'Diaconía', 'Ujieres', 'Intercesión', 'Otro'] },
-      { id: 'notas', label: 'Notas', tipo: 'textarea', full: true },
-    ]
-  },
-  {
-    key: 'jovenes',
-    label: 'Jóvenes de la Iglesia',
-    subtitulo: 'Lista de jóvenes de la iglesia agrupados por cargos',
-    campoTitulo: 'nombre',
-    campoBadge: 'ocupacion',
-    agruparPor: 'cargo',
-    gruposFijos: CARGOS_LISTA,
-    camposDetalle: ['telefono', 'nacimiento', 'direccion'],
-    campos: [
-      { id: 'nombre', label: 'Nombre completo', tipo: 'text', requerido: true, full: true },
-      { id: 'cargo', label: 'Cargo', tipo: 'select', opciones: CARGOS_LISTA },
-      { id: 'telefono', label: 'Número de teléfono', tipo: 'tel' },
-      { id: 'nacimiento', label: 'Fecha de nacimiento', tipo: 'date' },
-      { id: 'direccion', label: 'Dirección donde vive', tipo: 'text', full: true },
-      { id: 'ocupacion', label: 'Ocupación (Estudia / Trabaja)', tipo: 'text', full: true },
-      { id: 'notas', label: 'Notas adicionales', tipo: 'textarea', full: true }
-    ]
-  },
-  {
-    key: 'jovenes_invitados',
-    label: 'Jóvenes Invitados',
-    subtitulo: 'Jóvenes invitados por primera vez o eventos',
-    campoTitulo: 'nombre',
-    campoBadge: 'ocupacion',
-    camposDetalle: ['telefono', 'nacimiento', 'direccion'],
-    campos: [
-      { id: 'nombre', label: 'Nombre completo', tipo: 'text', requerido: true, full: true },
-      { id: 'telefono', label: 'Número de teléfono', tipo: 'tel' },
-      { id: 'nacimiento', label: 'Fecha de nacimiento', tipo: 'date' },
-      { id: 'direccion', label: 'Dirección donde vive', tipo: 'text', full: true },
-      { id: 'ocupacion', label: 'Ocupación (Estudia / Trabaja)', tipo: 'text', full: true },
-      { id: 'notas', label: 'Notas adicionales', tipo: 'textarea', full: true }
-    ]
-  },
-  {
-    key: 'escuela_ministerial',
-    label: 'Escuela Ministerial',
-    subtitulo: 'Alumnos en formación por niveles',
-    campoTitulo: 'nombre',
-    campoBadge: 'estado',
-    agruparPor: 'nivel',
-    gruposFijos: ['Fundamentos', 'LBS', 'La Visión', 'Lideres de Casa de Paz', 'El poder del servicio', 'El poder de la honra', 'Profético'],
-    camposDetalle: ['lugar','telefono', 'edad', 'modulo'],
-    campos: [
-      { id: 'nombre', label: 'Nombre completo', tipo: 'text', requerido: true, full: true },
-      { id: 'telefono', label: 'Teléfono', tipo: 'tel' },
-      { id: 'edad', label: 'Edad', tipo: 'text' },
-      { id: 'lugar', label: 'Lugar de residencia', tipo: 'text' },
-      { id: 'modulo', label: 'Módulo', tipo: 'select', opciones: ['Presencial', 'En línea'] },
-      { id: 'nivel', label: 'Nivel', tipo: 'select', opciones: ['Fundamentos', 'LBS', 'La Visión', 'Lideres de Casa de Paz', 'El poder del servicio', 'El poder de la honra', 'Profético'] },
-      { id: 'fechaInicio', label: 'Fecha de inicio', tipo: 'date' },
-      { id: 'estado', label: 'Estado', tipo: 'select', opciones: ['Cursando', 'Graduado'] },
-      { id: 'notas', label: 'Notas', tipo: 'textarea', full: true },
-    ]
-  },
-  {
-    key: 'visitantes',
-    label: 'Visitantes',
-    subtitulo: 'Primera vez en la iglesia',
-    campoTitulo: 'nombre',
-    campoBadge: 'interesado',
-    camposDetalle: ['telefono', 'fechaVisita', 'invitadoPor'],
-    campos: [
-      { id: 'nombre', label: 'Nombre completo', tipo: 'text', requerido: true, full: true },
-      { id: 'telefono', label: 'Teléfono', tipo: 'tel' },
-      { id: 'fechaVisita', label: 'Fecha de visita', tipo: 'date' },
-      { id: 'invitadoPor', label: 'Invitado por', tipo: 'text' },
-      { id: 'comoSeEntero', label: '¿Cómo se enteró?', tipo: 'select', opciones: ['', 'Redes sociales', 'Invitación de un miembro', 'Pasando por el área', 'Otro'] },
-      { id: 'interesado', label: '¿Le interesa seguir asistiendo?', tipo: 'select', opciones: ['Sí', 'Tal vez', 'No'] },
-      { id: 'notas', label: 'Notas', tipo: 'textarea', full: true },
-    ]
-  },
-  {
-    key: 'casas_paz',
-    label: 'Casas de Paz',
-    subtitulo: 'Grupos en los hogares',
-    campoTitulo: 'nombreLider',
-    campoBadge: 'zona',
-    camposDetalle: ['direccion', 'diaHorario', 'cantidadAsistentes'],
-    campos: [
-      { id: 'nombreLider', label: 'Nombre del líder ', tipo: 'text', requerido: true, full: true },
-      { id: 'direccion', label: 'Dirección', tipo: 'text', full: true },
-      { id: 'zona', label: 'Zona / sector', tipo: 'text' },
-      { id: 'diaHorario', label: 'Día y horario', tipo: 'text' },
-      { id: 'cantidadAsistentes', label: 'Cantidad aproximada de asistentes', tipo: 'number' },
-      { id: 'notas', label: 'Notas', tipo: 'textarea', full: true },
-    ]
-  },
-];
-
-let moduloActivo = MODULOS[0];
-let registros = [];
-let editandoId = null;
-
-async function cargarModulo(){
-  document.getElementById('loading').style.display = 'block';
-  document.getElementById('contenido').style.display = 'none';
-  try{
-    const res = await fetch(`/api/registros/${moduloActivo.key}`);
-    const data = await res.json();
-    registros = Array.isArray(data) ? data : [];
-  }catch(e){
-    console.error('No se pudo conectar con el servidor', e);
-    document.getElementById('loading').textContent = 'No se pudo conectar con el servidor. ¿Está corriendo "npm start"?';
-    return;
+  if (localStorage.getItem('sesion_iniciada') !== 'true') {
+    window.location.href = 'login.html';
   }
-  document.getElementById('loading').style.display = 'none';
-  document.getElementById('contenido').style.display = 'block';
-  render();
-}
 
-async function crearRegistro(datos){
-  const res = await fetch(`/api/registros/${moduloActivo.key}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(datos)
+  function tienePermiso(accion) {
+    const usuarioActualName = localStorage.getItem('usuario_actual') || 'admin';
+    const usuarios = JSON.parse(localStorage.getItem('sistema_usuarios')) || [
+      { username: 'admin', permisos: ['crear', 'editar', 'eliminar', 'reportes', 'usuarios'] },
+      { username: 'pastor', permisos: ['crear', 'editar', 'reportes'] }
+    ];
+    
+    const user = usuarios.find(u => u.username === usuarioActualName);
+    return user ? user.permisos.includes(accion) : true;
+  }
+
+  if (tienePermiso('reportes')) {
+    document.getElementById('btnIrReportes').style.display = 'inline-block';
+  }
+
+  if (tienePermiso('usuarios')) {
+    document.getElementById('btnIrUsuarios').style.display = 'inline-block';
+  }
+
+  if (!tienePermiso('crear')) {
+    document.getElementById('btnNuevo').style.display = 'none';
+  }
+
+  document.getElementById('btnCerrarSesion').addEventListener('click', () => {
+    localStorage.removeItem('sesion_iniciada');
+    localStorage.removeItem('usuario_actual');
+    window.location.href = 'login.html';
   });
-  return res.json();
-}
 
-async function actualizarRegistro(id, datos){
-  const res = await fetch(`/api/registros/${moduloActivo.key}/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(datos)
-  });
-  return res.json();
-}
+  let cargosCache = ['Miembro', 'Lider', 'Mentor', 'Evangelista', 'Anciano', 'Profeta', 'Pastor'];
 
-async function eliminarRegistro(id){
-  await fetch(`/api/registros/${moduloActivo.key}/${id}`, { method: 'DELETE' });
-}
+  async function obtenerCargosDinamicos() {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'cargos_ministeriales'));
+      const data = [];
+      querySnapshot.forEach((docSnap) => {
+        data.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      if (data.length > 0) {
+        cargosCache = data.map(c => c.nombre || c);
+      }
+    } catch(e) {
+      console.error("Error al obtener cargos", e);
+    }
+    return ['', ...cargosCache];
+  }
 
-function render(){
-  document.getElementById('tituloModulo').textContent = moduloActivo.label;
-  document.getElementById('subtituloModulo').textContent = moduloActivo.subtitulo;
-  document.getElementById('statTotal').textContent = registros.length;
-  renderModulos();
-  renderLista();
-}
+  const MODULOS = [
+    {
+      key: 'cargos_ministeriales',
+      label: 'Cargos Ministeriales',
+      subtitulo: 'Catálogo y gestión de cargos de la iglesia',
+      tipoVista: 'tabla_cargos',
+      campos: [
+        { id: 'nombre', label: 'Nombre del cargo', tipo: 'text', requerido: true, full: true },
+        { id: 'descripcion', label: 'Descripción / Responsabilidades', tipo: 'textarea', full: true }
+      ]
+    },
+    {
+      key: 'miembros',
+      label: 'Miembros',
+      subtitulo: 'Libro de la congregación en formato de listado',
+      tipoVista: 'tabla',
+      obtenerOpcionesCargo: obtenerCargosDinamicos,
+      campos: [
+        { id: 'nombre', label: 'Nombre completo', tipo: 'text', requerido: true, full: true },
+        { id: 'cargo', label: 'Cargo', tipo: 'selectDinamico' },
+        { id: 'telefono', label: 'Teléfono', tipo: 'tel' },
+        { id: 'email', label: 'Correo', tipo: 'email' },
+        { id: 'direccion', label: 'Dirección', tipo: 'text', full: true },
+        { id: 'nacimiento', label: 'Fecha de nacimiento', tipo: 'date' },
+        { id: 'ministerio', label: 'Ministerio / grupo', tipo: 'select', opciones: ['', 'Alabanza', 'Jóvenes', 'Niños', 'Diaconía', 'Ujieres', 'Intercesión', 'Otro'] },
+        { id: 'notas', label: 'Notas', tipo: 'textarea', full: true },
+      ]
+    },
+    {
+      key: 'jovenes',
+      label: 'Jóvenes de la Iglesia',
+      subtitulo: 'Lista general de jóvenes de la congregación',
+      tipoVista: 'tabla',
+      obtenerOpcionesCargo: obtenerCargosDinamicos,
+      campos: [
+        { id: 'nombre', label: 'Nombre completo', tipo: 'text', requerido: true, full: true },
+        { id: 'cargo', label: 'Cargo', tipo: 'selectDinamico' },
+        { id: 'telefono', label: 'Número de teléfono', tipo: 'tel' },
+        { id: 'nacimiento', label: 'Fecha de nacimiento', tipo: 'date' },
+        { id: 'direccion', label: 'Dirección donde vive', tipo: 'text', full: true },
+        { id: 'ocupacion', label: 'Ocupación (Estudia / Trabaja)', tipo: 'text', full: true },
+        { id: 'notas', label: 'Notas adicionales', tipo: 'textarea', full: true }
+      ]
+    },
+    {
+      key: 'jovenes_invitados',
+      label: 'Jóvenes Invitados',
+      subtitulo: 'Jóvenes invitados por primera vez o eventos',
+      tipoVista: 'tabla',
+      campos: [
+        { id: 'nombre', label: 'Nombre completo', tipo: 'text', requerido: true, full: true },
+        { id: 'telefono', label: 'Número de teléfono', tipo: 'tel' },
+        { id: 'nacimiento', label: 'Fecha de nacimiento', tipo: 'date' },
+        { id: 'direccion', label: 'Dirección donde vive', tipo: 'text', full: true },
+        { id: 'ocupacion', label: 'Ocupación (Estudia / Trabaja)', tipo: 'text', full: true },
+        { id: 'notas', label: 'Notas adicionales', tipo: 'textarea', full: true }
+      ]
+    },
+    {
+      key: 'equipo_ministerial',
+      label: 'Equipo Ministerial',
+      subtitulo: 'Directorio de líderes, pastores y oficiales',
+      tipoVista: 'enlace',
+      urlDestino: 'equipo_ministerial.html'
+    },
+    {
+      key: 'escuela_ministerial',
+      label: 'Escuela Ministerial',
+      subtitulo: 'Alumnos en formación por niveles',
+      tipoVista: 'tarjetas',
+      campoTitulo: 'nombre',
+      campoBadge: 'estado',
+      agruparPor: 'nivel',
+      gruposFijos: ['Fundamentos', 'LBS', 'La Visión', 'Lideres de Casa de Paz', 'El poder del servicio', 'El poder de la honra', 'Profético'],
+      camposDetalle: ['lugar','telefono', 'edad', 'modulo'],
+      campos: [
+        { id: 'nombre', label: 'Nombre completo', tipo: 'text', requerido: true, full: true },
+        { id: 'telefono', label: 'Teléfono', tipo: 'tel' },
+        { id: 'edad', label: 'Edad', tipo: 'text' },
+        { id: 'lugar', label: 'Lugar de residencia', tipo: 'text' },
+        { id: 'modulo', label: 'Módulo', tipo: 'select', opciones: ['Presencial', 'En línea'] },
+        { id: 'nivel', label: 'Nivel', tipo: 'select', opciones: ['Fundamentos', 'LBS', 'La Visión', 'Lideres de Casa de Paz', 'El poder del servicio', 'El poder de la honra', 'Profético'] },
+        { id: 'fechaInicio', label: 'Fecha de inicio', tipo: 'date' },
+        { id: 'estado', label: 'Estado', tipo: 'select', opciones: ['Cursando', 'Graduado'] },
+        { id: 'notas', label: 'Notas', tipo: 'textarea', full: true },
+      ]
+    },
+    {
+      key: 'visitantes',
+      label: 'Visitantes',
+      subtitulo: 'Primera vez en la iglesia',
+      tipoVista: 'tarjetas',
+      campoTitulo: 'nombre',
+      campoBadge: 'interesado',
+      camposDetalle: ['telefono', 'fechaVisita', 'invitadoPor'],
+      campos: [
+        { id: 'nombre', label: 'Nombre completo', tipo: 'text', requerido: true, full: true },
+        { id: 'telefono', label: 'Teléfono', tipo: 'tel' },
+        { id: 'fechaVisita', label: 'Fecha de visita', tipo: 'date' },
+        { id: 'invitadoPor', label: 'Invitado por', tipo: 'text' },
+        { id: 'comoSeEntero', label: '¿Cómo se enteró?', tipo: 'select', opciones: ['', 'Redes sociales', 'Invitación de un miembro', 'Pasando por el área', 'Otro'] },
+        { id: 'interesado', label: '¿Le interesa seguir asistiendo?', tipo: 'select', opciones: ['Sí', 'Tal vez', 'No'] },
+        { id: 'notas', label: 'Notas', tipo: 'textarea', full: true },
+      ]
+    },
+    {
+      key: 'casas_paz',
+      label: 'Casas de Paz',
+      subtitulo: 'Grupos en los hogares',
+      tipoVista: 'tarjetas',
+      campoTitulo: 'nombreLider',
+      campoBadge: 'zona',
+      camposDetalle: ['direccion', 'diaHorario', 'cantidadAsistentes'],
+      campos: [
+        { id: 'nombreLider', label: 'Nombre del líder ', tipo: 'text', requerido: true, full: true },
+        { id: 'direccion', label: 'Dirección', tipo: 'text', full: true },
+        { id: 'zona', label: 'Zona / sector', tipo: 'text' },
+        { id: 'diaHorario', label: 'Día y horario', tipo: 'text' },
+        { id: 'cantidadAsistentes', label: 'Cantidad aproximada de asistentes', tipo: 'number' },
+        { id: 'notas', label: 'Notas', tipo: 'textarea', full: true },
+      ]
+    },
+  ];
 
-function renderModulos(){
-  document.getElementById('modulos').innerHTML = MODULOS.map(m => `
-    <button class="modulo-btn ${m.key === moduloActivo.key ? 'active' : ''}" data-key="${m.key}">
-      ${m.label}
-    </button>
-  `).join('');
-  document.querySelectorAll('.modulo-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      moduloActivo = MODULOS.find(m => m.key === btn.dataset.key);
-      document.getElementById('buscar').value = '';
-      cargarModulo();
+  let moduloActivo = MODULOS[0];
+  let registros = [];
+  let editandoId = null;
+
+  async function cargarModulo(){
+    if (moduloActivo.tipoVista === 'enlace') {
+      window.location.href = moduloActivo.urlDestino;
+      return;
+    }
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('contenido').style.display = 'none';
+    try{
+      const querySnapshot = await getDocs(collection(db, moduloActivo.key));
+      registros = [];
+      querySnapshot.forEach((docSnap) => {
+        registros.push({ id: docSnap.id, ...docSnap.data() });
+      });
+    }catch(e){
+      console.error('Error al conectar con Firebase', e);
+      document.getElementById('loading').textContent = 'No se pudo conectar con Firebase. Revisa tu configuración.';
+      return;
+    }
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('contenido').style.display = 'block';
+    render();
+  }
+
+  async function crearRegistro(datos){
+    const docRef = await addDoc(collection(db, moduloActivo.key), datos);
+    return { id: docRef.id, ...datos };
+  }
+
+  async function actualizarRegistro(id, datos){
+    const docRef = doc(db, moduloActivo.key, id);
+    await updateDoc(docRef, datos);
+    return { id, ...datos };
+  }
+
+  async function eliminarRegistro(id){
+    const docRef = doc(db, moduloActivo.key, id);
+    await deleteDoc(docRef);
+  }
+
+  function render(){
+    document.getElementById('tituloModulo').textContent = moduloActivo.label;
+    document.getElementById('subtituloModulo').textContent = moduloActivo.subtitulo;
+    document.getElementById('statTotal').textContent = registros.length;
+    renderModulos();
+    renderLista();
+  }
+
+  function renderModulos(){
+    document.getElementById('modulos').innerHTML = MODULOS.map(m => {
+      if (m.tipoVista === 'enlace') {
+        return `<a href="${m.urlDestino}" class="modulo-btn">${m.label}</a>`;
+      }
+      return `
+        <button class="modulo-btn ${m.key === moduloActivo.key ? 'active' : ''}" data-key="${m.key}">
+          ${m.label}
+        </button>
+      `;
+    }).join('');
+    
+    document.querySelectorAll('.modulo-btn[data-key]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        moduloActivo = MODULOS.find(m => m.key === btn.dataset.key);
+        document.getElementById('buscar').value = '';
+        cargarModulo();
+      });
     });
-  });
-}
+  }
 
-function crearTarjetaHTML(r){
-  const titulo = r[moduloActivo.campoTitulo] || '(sin nombre)';
-  const badge = moduloActivo.campoBadge ? r[moduloActivo.campoBadge] : '';
-  const detalles = moduloActivo.camposDetalle
-    .map(campo => r[campo] ? `<span>${escapeHtml(String(r[campo]))}</span>` : '')
-    .filter(Boolean)
-    .join('');
+  function renderLista(){
+    const q = document.getElementById('buscar').value.trim().toLowerCase();
+    const items = registros.filter(r => {
+      if(!q) return true;
+      return Object.values(r).some(v => {
+        if (typeof v === 'object') return JSON.stringify(v).toLowerCase().includes(q);
+        return String(v || '').toLowerCase().includes(q);
+      });
+    });
 
-  let htmlMiembros = '';
-  if (moduloActivo.key === 'casas_paz' && Array.isArray(r.miembros) && r.miembros.length > 0) {
-    const tags = r.miembros.map(m => `<span class="tag-miembro">${escapeHtml(m.nombre)} ${m.telefono ? '('+escapeHtml(m.telefono)+')' : ''}</span>`).join('');
-    htmlMiembros = `
-      <div class="miembros-resumen">
-        <strong>Integrantes registrados (${r.miembros.length}):</strong>
-        ${tags}
+    const lista = document.getElementById('lista');
+
+    if (moduloActivo.tipoVista === 'tabla_cargos') {
+      if(items.length === 0){
+        lista.innerHTML = `<div class="vacio">Aún no hay cargos registrados. Pulsa "+" para añadir el primero.</div>`;
+        return;
+      }
+      lista.innerHTML = `
+        <div class="card-tabla">
+          <table>
+            <thead>
+              <tr>
+                <th>Nombre del Cargo</th>
+                <th>Descripción</th>
+                <th style="text-align:right;">Opciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${items.map(r => `
+                <tr>
+                  <td style="font-weight:700;">${escapeHtml(r.nombre || '')}</td>
+                  <td>${escapeHtml(r.descripcion || 'Sin descripción')}</td>
+                  <td style="text-align:right; white-space:nowrap;">
+                    ${tienePermiso('editar') ? `<button class="btn btn-ghost" style="padding:4px 8px; font-size:0.75rem;" data-editar="${r.id}">Editar</button>` : ''}
+                    ${tienePermiso('eliminar') ? `<button class="btn btn-danger" style="font-size:0.75rem;" data-borrar="${r.id}">Eliminar</button>` : ''}
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    } else if (moduloActivo.tipoVista === 'tabla') {
+      if(items.length === 0){
+        lista.innerHTML = `<div class="vacio">Aún no hay registros aquí. Pulsa "+" para añadir el primero.</div>`;
+        return;
+      }
+      lista.innerHTML = `
+        <div class="card-tabla">
+          <table>
+            <thead>
+              <tr>
+                <th>Nombre Completo</th>
+                <th>Teléfono</th>
+                <th>Cargo / Detalle</th>
+                <th style="text-align:right;">Opciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${items.map(r => `
+                <tr>
+                  <td style="font-weight:700;">${escapeHtml(r.nombre || '')}</td>
+                  <td>${escapeHtml(r.telefono || 'Sin registro')}</td>
+                  <td>${r.cargo ? `<span class="badge-cargo">${escapeHtml(r.cargo)}</span>` : escapeHtml(r.ocupacion || 'General')}</td>
+                  <td style="text-align:right; white-space:nowrap;">
+                    ${tienePermiso('editar') ? `<button class="btn btn-ghost" style="padding:4px 8px; font-size:0.75rem;" data-editar="${r.id}">Editar</button>` : ''}
+                    ${tienePermiso('eliminar') ? `<button class="btn btn-danger" style="font-size:0.75rem;" data-borrar="${r.id}">Eliminar</button>` : ''}
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    } else {
+      const debeAgrupar = Boolean(
+        moduloActivo.agruparPor && 
+        moduloActivo.gruposFijos
+      );
+
+      if (debeAgrupar) {
+        const campoGrupo = moduloActivo.agruparPor;
+        const gruposOficiales = moduloActivo.gruposFijos;
+        
+        const grupos = {};
+        gruposOficiales.forEach(g => grupos[g] = []);
+        grupos['Sin asignar'] = [];
+
+        items.forEach(r => {
+          const val = r[campoGrupo];
+          if (val && grupos[val]) {
+            grupos[val].push(r);
+          } else {
+            grupos['Sin asignar'].push(r);
+          }
+        });
+
+        let htmlAgrupado = '';
+        
+        gruposOficiales.forEach(grupoNombre => {
+          const listaGrupo = grupos[grupoNombre];
+          const tieneRegistros = listaGrupo.length > 0;
+          
+          htmlAgrupado += `
+            <div class="grupo-categoria">
+              <div class="grupo-categoria-titulo">
+                <span>${escapeHtml(grupoNombre)}</span>
+                <span class="cant-registros">${listaGrupo.length} ${listaGrupo.length === 1 ? 'persona' : 'personas'}</span>
+              </div>
+              <div class="grupo-categoria-cards">
+                ${tieneRegistros 
+                  ? listaGrupo.map(r => crearTarjetaHTML(r)).join('') 
+                  : `<div class="categoria-vacia">Sin registros en ${escapeHtml(grupoNombre)}</div>`}
+              </div>
+            </div>
+          `;
+        });
+
+        if (grupos['Sin asignar'].length > 0) {
+          const unassigned = grupos['Sin asignar'];
+          htmlAgrupado += `
+            <div class="grupo-categoria">
+              <div class="grupo-categoria-titulo">
+                <span>Sin Cargo / Nivel Asignado</span>
+                <span class="cant-registros">${unassigned.length}</span>
+              </div>
+              <div class="grupo-categoria-cards">
+                ${unassigned.map(r => crearTarjetaHTML(r)).join('')}
+              </div>
+            </div>
+          `;
+        }
+
+        lista.innerHTML = htmlAgrupado;
+      } else {
+        if(items.length === 0){
+          lista.innerHTML = `<div class="vacio">Aún no hay registros aquí. Pulsa "+" para añadir el primero.</div>`;
+          return;
+        }
+        lista.innerHTML = items.map(r => crearTarjetaHTML(r)).join('');
+      }
+    }
+
+    lista.querySelectorAll('[data-editar]').forEach(b => b.addEventListener('click', () => abrirEdicion(b.dataset.editar)));
+    lista.querySelectorAll('[data-borrar]').forEach(b => b.addEventListener('click', () => borrar(b.dataset.borrar)));
+  }
+
+  function crearTarjetaHTML(r){
+    const titulo = r[moduloActivo.campoTitulo] || '(sin nombre)';
+    const badge = moduloActivo.campoBadge ? r[moduloActivo.campoBadge] : '';
+    const detalles = moduloActivo.camposDetalle
+      .map(campo => r[campo] ? `<span>${escapeHtml(String(r[campo]))}</span>` : '')
+      .filter(Boolean)
+      .join('');
+
+    let htmlMiembros = '';
+    if (moduloActivo.key === 'casas_paz' && Array.isArray(r.miembros) && r.miembros.length > 0) {
+      const tags = r.miembros.map(m => `<span class="tag-miembro">${escapeHtml(m.nombre)} ${m.telefono ? '('+escapeHtml(m.telefono)+')' : ''}</span>`).join('');
+      htmlMiembros = `
+        <div class="miembros-resumen">
+          <strong>Integrantes registrados (${r.miembros.length}):</strong>
+          ${tags}
+        </div>
+      `;
+    }
+
+    const btnEditar = tienePermiso('editar') ? `<button class="btn btn-ghost" data-editar="${r.id}">Editar</button>` : '';
+    const btnBorrar = tienePermiso('eliminar') ? `<button class="btn btn-danger" data-borrar="${r.id}">Eliminar</button>` : '';
+
+    return `
+      <div class="card">
+        <div class="info">
+          <p class="titulo">${escapeHtml(titulo)}</p>
+          <div class="detalle">${detalles}</div>
+          ${badge ? `<span class="badge">${escapeHtml(badge)}</span>` : ''}
+          ${htmlMiembros}
+        </div>
+        <div class="acciones">
+          ${btnEditar}
+          ${btnBorrar}
+        </div>
       </div>
     `;
   }
 
-  const btnEditar = tienePermiso('editar') ? `<button class="btn btn-ghost" data-editar="${r.id}">Editar</button>` : '';
-  const btnBorrar = tienePermiso('eliminar') ? `<button class="btn btn-danger" data-borrar="${r.id}">Eliminar</button>` : '';
+  function escapeHtml(str){
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
 
-  return `
-    <div class="card">
-      <div class="info">
-        <p class="titulo">${escapeHtml(titulo)}</p>
-        <div class="detalle">${detalles}</div>
-        ${badge ? `<span class="badge">${escapeHtml(badge)}</span>` : ''}
-        ${htmlMiembros}
-      </div>
-      <div class="acciones">
-        ${btnEditar}
-        ${btnBorrar}
-      </div>
-    </div>
-  `;
-}
-
-function renderLista(){
-  const q = document.getElementById('buscar').value.trim().toLowerCase();
-  const items = registros.filter(r => {
-    if(!q) return true;
-    return Object.values(r).some(v => {
-      if (typeof v === 'object') return JSON.stringify(v).toLowerCase().includes(q);
-      return String(v || '').toLowerCase().includes(q);
-    });
-  });
-
-  const lista = document.getElementById('lista');
-
-  const debeAgrupar = Boolean(
-    moduloActivo.agruparPor && 
-    moduloActivo.gruposFijos && 
-    moduloActivo.key !== 'jovenes_invitados'
-  );
-
-  if (debeAgrupar) {
-    const campoGrupo = moduloActivo.agruparPor;
-    const gruposOficiales = moduloActivo.gruposFijos;
+  async function renderFormulario(valores = {}){
+    const contenedor = document.getElementById('formCampos');
     
-    const grupos = {};
-    gruposOficiales.forEach(g => grupos[g] = []);
-    grupos['Sin asignar'] = [];
-
-    items.forEach(r => {
-      const val = r[campoGrupo];
-      if (val && grupos[val]) {
-        grupos[val].push(r);
-      } else {
-        grupos['Sin asignar'].push(r);
-      }
-    });
-
-    let htmlAgrupado = '';
-    
-    gruposOficiales.forEach(grupoNombre => {
-      const listaGrupo = grupos[grupoNombre];
-      const tieneRegistros = listaGrupo.length > 0;
+    let camposHtml = '';
+    for(const campo of moduloActivo.campos) {
+      const valor = valores[campo.id] || '';
+      const claseFull = campo.full ? 'full' : '';
+      let control = '';
       
-      htmlAgrupado += `
-        <div class="grupo-categoria">
-          <div class="grupo-categoria-titulo">
-            <span>${escapeHtml(grupoNombre)}</span>
-            <span class="cant-registros">${listaGrupo.length} ${listaGrupo.length === 1 ? 'persona' : 'personas'}</span>
-          </div>
-          <div class="grupo-categoria-cards">
-            ${tieneRegistros 
-              ? listaGrupo.map(r => crearTarjetaHTML(r)).join('') 
-              : `<div class="categoria-vacia">Sin registros en ${escapeHtml(grupoNombre)}</div>`}
-          </div>
-        </div>
-      `;
+      if(campo.tipo === 'selectDinamico'){
+        const opciones = await moduloActivo.obtenerOpcionesCargo();
+        control = `<select id="f_${campo.id}">${opciones.map(op =>
+          `<option value="${escapeHtml(op)}" ${valor === op ? 'selected' : ''}>${op || 'Seleccionar...'}</option>`
+        ).join('')}</select>`;
+      }else if(campo.tipo === 'select'){
+        control = `<select id="f_${campo.id}">${campo.opciones.map(op =>
+          `<option value="${escapeHtml(op)}" ${valor === op ? 'selected' : ''}>${op || 'Seleccionar...'}</option>`
+        ).join('')}</select>`;
+      }else if(campo.tipo === 'textarea'){
+        control = `<textarea id="f_${campo.id}" rows="2">${escapeHtml(String(valor))}</textarea>`;
+      }else{
+        control = `<input type="${campo.tipo}" id="f_${campo.id}" value="${escapeHtml(String(valor))}" ${campo.requerido ? 'required' : ''}>`;
+      }
+      camposHtml += `<label class="${claseFull}">${campo.label}${control}</label>`;
+    }
+    
+    contenedor.innerHTML = camposHtml;
+
+    const seccionMiembros = document.getElementById('seccionMiembrosCasaPaz');
+    const listaMiembrosForm = document.getElementById('listaMiembrosForm');
+    listaMiembrosForm.innerHTML = '';
+
+    if (moduloActivo.key === 'casas_paz') {
+      seccionMiembros.style.display = 'block';
+      const miembrosPrevios = valores.miembros || [];
+      if(miembrosPrevios.length > 0){
+        miembrosPrevios.forEach(m => agregarFilaMiembro(m.nombre, m.telefono));
+      } else {
+        agregarFilaMiembro();
+      }
+    } else {
+      seccionMiembros.style.display = 'none';
+    }
+  }
+
+  function agregarFilaMiembro(nombre = '', telefono = ''){
+    const div = document.createElement('div');
+    div.className = 'miembro-fila';
+    div.innerHTML = `
+      <input type="text" class="m-nombre" placeholder="Nombre del integrante" value="${escapeHtml(nombre)}">
+      <input type="tel" class="m-telefono" placeholder="Teléfono" value="${escapeHtml(telefono)}">
+      <button type="button" class="btn-quitar-miembro" title="Quitar">✕</button>
+    `;
+    div.querySelector('.btn-quitar-miembro').addEventListener('click', () => div.remove());
+    document.getElementById('listaMiembrosForm').appendChild(div);
+  }
+
+  document.getElementById('btnAgregarMiembro').addEventListener('click', () => agregarFilaMiembro());
+
+  function leerFormulario(){
+    const datos = {};
+    moduloActivo.campos.forEach(campo => {
+      datos[campo.id] = document.getElementById(`f_${campo.id}`).value.trim();
     });
 
-    if (grupos['Sin asignar'].length > 0) {
-      const unassigned = grupos['Sin asignar'];
-      htmlAgrupado += `
-        <div class="grupo-categoria">
-          <div class="grupo-categoria-titulo">
-            <span>Sin Cargo / Nivel Asignado</span>
-            <span class="cant-registros">${unassigned.length}</span>
-          </div>
-          <div class="grupo-categoria-cards">
-            ${unassigned.map(r => crearTarjetaHTML(r)).join('')}
-          </div>
-        </div>
-      `;
+    if (moduloActivo.key === 'casas_paz') {
+      const filas = document.querySelectorAll('#listaMiembrosForm .miembro-fila');
+      datos.miembros = [];
+      filas.forEach(f => {
+        const nom = f.querySelector('.m-nombre').value.trim();
+        const tel = f.querySelector('.m-telefono').value.trim();
+        if(nom) {
+          datos.miembros.push({ nombre: nom, telefono: tel });
+        }
+      });
     }
 
-    lista.innerHTML = htmlAgrupado;
-  } else {
-    if(items.length === 0){
-      lista.innerHTML = `<div class="vacio">Aún no hay registros aquí. Pulsa "+" para añadir el primero.</div>`;
+    return datos;
+  }
+
+  function abrirModal(){ document.getElementById('overlay').style.display = 'flex'; }
+  function cerrarModal(){
+    document.getElementById('overlay').style.display = 'none';
+    editandoId = null;
+  }
+
+  async function abrirNuevo(){
+    if (!tienePermiso('crear')) {
+      alert('No tienes permisos para crear registros.');
       return;
     }
-    lista.innerHTML = items.map(r => crearTarjetaHTML(r)).join('');
+    editandoId = null;
+    document.getElementById('modalTitulo').textContent = `Nuevo registro — ${moduloActivo.label}`;
+    await renderFormulario();
+    abrirModal();
   }
 
-  lista.querySelectorAll('[data-editar]').forEach(b => b.addEventListener('click', () => abrirEdicion(b.dataset.editar)));
-  lista.querySelectorAll('[data-borrar]').forEach(b => b.addEventListener('click', () => borrar(b.dataset.borrar)));
-}
+  async function abrirEdicion(id){
+    if (!tienePermiso('editar')) {
+      alert('No tienes permisos para editar registros.');
+      return;
+    }
+    const r = registros.find(x => x.id === id);
+    if(!r) return;
+    editandoId = id;
+    document.getElementById('modalTitulo').textContent = `Editar registro — ${moduloActivo.label}`;
+    await renderFormulario(r);
+    abrirModal();
+  }
 
-function escapeHtml(str){
-  const d = document.createElement('div');
-  d.textContent = str;
-  return d.innerHTML;
-}
+  async function borrar(id){
+    if (!tienePermiso('eliminar')) {
+      alert('No tienes permisos para eliminar registros.');
+      return;
+    }
+    if(!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
+    await eliminarRegistro(id);
+    registros = registros.filter(r => r.id !== id);
+    render();
+  }
 
-function renderFormulario(valores = {}){
-  const contenedor = document.getElementById('formCampos');
-  contenedor.innerHTML = moduloActivo.campos.map(campo => {
-    const valor = valores[campo.id] || '';
-    const claseFull = campo.full ? 'full' : '';
-    let control = '';
-    if(campo.tipo === 'select'){
-      control = `<select id="f_${campo.id}">${campo.opciones.map(op =>
-        `<option value="${escapeHtml(op)}" ${valor === op ? 'selected' : ''}>${op || 'Seleccionar...'}</option>`
-      ).join('')}</select>`;
-    }else if(campo.tipo === 'textarea'){
-      control = `<textarea id="f_${campo.id}" rows="2">${escapeHtml(String(valor))}</textarea>`;
+  document.getElementById('btnNuevo').addEventListener('click', abrirNuevo);
+  document.getElementById('btnCancelar').addEventListener('click', cerrarModal);
+  document.getElementById('overlay').addEventListener('click', (e) => { if(e.target.id === 'overlay') cerrarModal(); });
+  document.getElementById('buscar').addEventListener('input', renderLista);
+
+  document.getElementById('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const datos = leerFormulario();
+    const campoTitulo = moduloActivo.campos.find(c => c.requerido);
+    if(campoTitulo && !datos[campoTitulo.id]) return;
+
+    if(editandoId){
+      if (!tienePermiso('editar')) return;
+      const actualizado = await actualizarRegistro(editandoId, datos);
+      const idx = registros.findIndex(r => r.id === editandoId);
+      if(idx > -1) registros[idx] = actualizado;
     }else{
-      control = `<input type="${campo.tipo}" id="f_${campo.id}" value="${escapeHtml(String(valor))}" ${campo.requerido ? 'required' : ''}>`;
+      if (!tienePermiso('crear')) return;
+      const nuevo = await crearRegistro(datos);
+      registros.push(nuevo);
     }
-    return `<label class="${claseFull}">${campo.label}${control}</label>`;
-  }).join('');
-
-  const seccionMiembros = document.getElementById('seccionMiembrosCasaPaz');
-  const listaMiembrosForm = document.getElementById('listaMiembrosForm');
-  listaMiembrosForm.innerHTML = '';
-
-  if (moduloActivo.key === 'casas_paz') {
-    seccionMiembros.style.display = 'block';
-    const miembrosPrevios = valores.miembros || [];
-    if(miembrosPrevios.length > 0){
-      miembrosPrevios.forEach(m => agregarFilaMiembro(m.nombre, m.telefono));
-    } else {
-      agregarFilaMiembro();
-    }
-  } else {
-    seccionMiembros.style.display = 'none';
-  }
-}
-
-function agregarFilaMiembro(nombre = '', telefono = ''){
-  const div = document.createElement('div');
-  div.className = 'miembro-fila';
-  div.innerHTML = `
-    <input type="text" class="m-nombre" placeholder="Nombre del integrante" value="${escapeHtml(nombre)}">
-    <input type="tel" class="m-telefono" placeholder="Teléfono" value="${escapeHtml(telefono)}">
-    <button type="button" class="btn-quitar-miembro" title="Quitar">✕</button>
-  `;
-  div.querySelector('.btn-quitar-miembro').addEventListener('click', () => div.remove());
-  document.getElementById('listaMiembrosForm').appendChild(div);
-}
-
-document.getElementById('btnAgregarMiembro').addEventListener('click', () => agregarFilaMiembro());
-
-function leerFormulario(){
-  const datos = {};
-  moduloActivo.campos.forEach(campo => {
-    datos[campo.id] = document.getElementById(`f_${campo.id}`).value.trim();
+    cerrarModal();
+    render();
   });
 
-  if (moduloActivo.key === 'casas_paz') {
-    const filas = document.querySelectorAll('#listaMiembrosForm .miembro-fila');
-    datos.miembros = [];
-    filas.forEach(f => {
-      const nom = f.querySelector('.m-nombre').value.trim();
-      const tel = f.querySelector('.m-telefono').value.trim();
-      if(nom) {
-        datos.miembros.push({ nombre: nom, telefono: tel });
-      }
-    });
-  }
-
-  return datos;
-}
-
-function abrirModal(){ document.getElementById('overlay').style.display = 'flex'; }
-function cerrarModal(){
-  document.getElementById('overlay').style.display = 'none';
-  editandoId = null;
-}
-
-function abrirNuevo(){
-  if (!tienePermiso('crear')) {
-    alert('No tienes permisos para crear registros.');
-    return;
-  }
-  editandoId = null;
-  document.getElementById('modalTitulo').textContent = `Nuevo registro — ${moduloActivo.label}`;
-  renderFormulario();
-  abrirModal();
-}
-
-function abrirEdicion(id){
-  if (!tienePermiso('editar')) {
-    alert('No tienes permisos para editar registros.');
-    return;
-  }
-  const r = registros.find(x => x.id === id);
-  if(!r) return;
-  editandoId = id;
-  document.getElementById('modalTitulo').textContent = `Editar registro — ${moduloActivo.label}`;
-  renderFormulario(r);
-  abrirModal();
-}
-
-async function borrar(id){
-  if (!tienePermiso('eliminar')) {
-    alert('No tienes permisos para eliminar registros.');
-    return;
-  }
-  if(!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
-  await eliminarRegistro(id);
-  registros = registros.filter(r => r.id !== id);
-  render();
-}
-
-document.getElementById('btnNuevo').addEventListener('click', abrirNuevo);
-document.getElementById('btnCancelar').addEventListener('click', cerrarModal);
-document.getElementById('overlay').addEventListener('click', (e) => { if(e.target.id === 'overlay') cerrarModal(); });
-document.getElementById('buscar').addEventListener('input', renderLista);
-
-document.getElementById('form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const datos = leerFormulario();
-  const campoTitulo = moduloActivo.campos.find(c => c.requerido);
-  if(campoTitulo && !datos[campoTitulo.id]) return;
-
-  if(editandoId){
-    if (!tienePermiso('editar')) return;
-    const actualizado = await actualizarRegistro(editandoId, datos);
-    const idx = registros.findIndex(r => r.id === editandoId);
-    if(idx > -1) registros[idx] = actualizado;
-  }else{
-    if (!tienePermiso('crear')) return;
-    const nuevo = await crearRegistro(datos);
-    registros.push(nuevo);
-  }
-  cerrarModal();
-  render();
-});
-
-cargarModulo();
+  cargarModulo();
 </script>
 </body>
 </html>
