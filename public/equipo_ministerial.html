@@ -30,6 +30,10 @@
   header.top .subtitle{ font-size:0.85rem; color:var(--ink-soft); font-style:italic; margin-top:2px; }
   .header-actions{ display:flex; align-items:center; gap:10px; flex-wrap: wrap; }
 
+  /* Estilos para los Bloques de Categorías */
+  .bloque-seccion { margin-bottom: 32px; }
+  .bloque-titulo { font-family: 'Fraunces', serif; font-size: 1.25rem; color: var(--wine-dark); margin-bottom: 12px; border-left: 4px solid var(--gold); padding-left: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+
   .card-tabla { background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--radius); overflow-x: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
   table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem; min-width: 600px; }
   th { background: #E5E9E1; padding: 14px 18px; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-soft); border-bottom: 1px solid var(--rule); }
@@ -78,19 +82,9 @@
     </div>
   </header>
 
-  <div class="card-tabla">
-    <table>
-      <thead>
-        <tr>
-          <th>Nombre Completo</th>
-          <th>Cargo Ministerial</th>
-          <th>Teléfono / Contacto</th>
-        </tr>
-      </thead>
-      <tbody id="tablaMinisterial">
-        <tr><td colspan="3" style="text-align:center; font-style:italic;">Cargando equipo ministerial...</td></tr>
-      </tbody>
-    </table>
+  <!-- Contenedor general donde se pintarán los bloques por categoría -->
+  <div id="contenedorBloques">
+    <div style="text-align:center; font-style:italic; padding: 20px;">Cargando equipo ministerial...</div>
   </div>
 </div>
 
@@ -107,13 +101,13 @@
         <label>Cargo Ministerial</label>
         <select id="cargoInput" required>
           <option value="" disabled selected>Seleccione el cargo...</option>
-          <option value="Miembro">Miembro</option>
-          <option value="Líder">Líder</option>
-          <option value="Mentor">Mentor</option>
-          <option value="Anciano">Anciano</option>
-          <option value="Evangelista">Evangelista</option>
-          <option value="Profeta">Profeta</option>
           <option value="Pastor">Pastor</option>
+          <option value="Profeta">Profeta</option>
+          <option value="Evangelista">Evangelista</option>
+          <option value="Anciano">Anciano</option>
+          <option value="Mentor">Mentor</option>
+          <option value="Líder">Líder</option>
+          <option value="Miembro">Miembro</option>
         </select>
       </div>
       <div class="form-group">
@@ -142,32 +136,107 @@
 
   if (localStorage.getItem('sesion_iniciada') !== 'true') window.location.href = 'login.html';
 
+  // Orden jerárquico deseado para mostrar los bloques
+  const ordenCargos = ["Pastor", "Profeta", "Evangelista", "Anciano", "Mentor", "Líder", "Miembro"];
+
   async function cargarEquipoMinisterial() {
-    const tbody = document.getElementById('tablaMinisterial');
+    const contenedor = document.getElementById('contenedorBloques');
     try {
       const snapshot = await db.collection("equipo_ministerial").get();
-      tbody.innerHTML = '';
       
-      let encontrados = 0;
+      if (snapshot.empty) {
+        contenedor.innerHTML = '<div style="text-align:center; font-style:italic; padding: 20px;">No hay registros en el equipo ministerial todavía.</div>';
+        return;
+      }
 
+      // Agrupar integrantes por su cargo
+      let grupos = {};
       snapshot.forEach(doc => {
         const m = doc.data();
-        encontrados++;
-        tbody.innerHTML += `
-          <tr>
-            <td style="font-weight:700;">${escapeHtml(m.nombre || '')}</td>
-            <td><span class="badge-cargo">${escapeHtml(m.cargo || '')}</span></td>
-            <td>${escapeHtml(m.telefono || 'Sin registro')}</td>
-          </tr>
-        `;
+        const cargo = m.cargo || 'Sin Asignar';
+        if (!grupos[cargo]) {
+          grupos[cargo] = [];
+        }
+        grupos[cargo].push(m);
       });
 
-      if (encontrados === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; font-style:italic;">No hay registros en el equipo ministerial todavía.</td></tr>';
+      contenedor.innerHTML = '';
+
+      // Recorrer el orden establecido para mostrar los bloques estructurados
+      ordenCargos.forEach(cargoActual => {
+        if (grupos[cargoActual] && grupos[cargoActual].length > 0) {
+          let filasHTML = '';
+          grupos[cargoActual].forEach(m => {
+            filasHTML += `
+              <tr>
+                <td style="font-weight:700; width: 40%;">${escapeHtml(m.nombre || '')}</td>
+                <td style="width: 30%;"><span class="badge-cargo">${escapeHtml(m.cargo || '')}</span></td>
+                <td style="width: 30%;">${escapeHtml(m.telefono || 'Sin registro')}</td>
+              </tr>
+            `;
+          });
+
+          contenedor.innerHTML += `
+            <div class="bloque-seccion">
+              <div class="bloque-titulo">${cargoActual}s / ${cargoActual}</div>
+              <div class="card-tabla">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Nombre Completo</th>
+                      <th>Cargo Ministerial</th>
+                      <th>Teléfono / Contacto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${filasHTML}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          `;
+        }
+      });
+
+      // Por si hay algún cargo distinto que no esté en la lista estricta
+      for (let cargoExtra in grupos) {
+        if (!ordenCargos.includes(cargoExtra)) {
+          let filasHTML = '';
+          grupos[cargoExtra].forEach(m => {
+            filasHTML += `
+              <tr>
+                <td style="font-weight:700; width: 40%;">${escapeHtml(m.nombre || '')}</td>
+                <td style="width: 30%;"><span class="badge-cargo">${escapeHtml(m.cargo || '')}</span></td>
+                <td style="width: 30%;">${escapeHtml(m.telefono || 'Sin registro')}</td>
+              </tr>
+            `;
+          });
+
+          contenedor.innerHTML += `
+            <div class="bloque-seccion">
+              <div class="bloque-titulo">${cargoExtra}</div>
+              <div class="card-tabla">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Nombre Completo</th>
+                      <th>Cargo Ministerial</th>
+                      <th>Teléfono / Contacto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${filasHTML}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          `;
+        }
       }
+
     } catch (e) {
       console.error(e);
-      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:red;">Error al cargar datos.</td></tr>';
+      contenedor.innerHTML = '<div style="text-align:center; color:red; padding: 20px;">Error al cargar datos.</div>';
     }
   }
 
