@@ -106,7 +106,7 @@
       <div class="form-group">
         <label>Cargo Ministerial</label>
         <select id="cargoInput" required>
-          <option value="" disabled selected>Seleccione un cargo...</option>
+          <option value="" disabled selected>Seleccione el cargo...</option>
           <option value="Miembro">Miembro</option>
           <option value="Líder">Líder</option>
           <option value="Mentor">Mentor</option>
@@ -189,8 +189,7 @@
     const nuevoLider = {
       nombre: document.getElementById('nombreInput').value.trim(),
       cargo: document.getElementById('cargoInput').value,
-      telefono: document.getElementById('telefonoInput').value.trim(),
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      telefono: document.getElementById('telefonoInput').value.trim()
     };
 
     try {
